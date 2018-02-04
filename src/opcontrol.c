@@ -9,9 +9,7 @@
  * PROS contains FreeRTOS (http://www.freertos.org) whose source code may be
  * obtained from http://sourceforge.net/projects/freertos/files/ or on request.
  */
-
-#include "variables.h"
-#include "main.h"
+#include "drive.h"
 
 /*
  * Runs the user operator control code. This function will be started in its own task with the
@@ -31,66 +29,91 @@
  * This task should never exit; it should end with some kind of infinite loop, even if empty.
  */
 
-int A3, A1, D5, U5, D6, U6, U8, D8, L8;
-int THRESH = 20;
-//int U7;
-//bool slowDrive;
+int joystick1 = 0, joystick3 = 0;
+int triggerUp5, triggerDown5, triggerUp6, triggerDown6;
+
 void operatorControl() {
-//  slowDrive = false;
-  while(true){
-      if((abs)(joystickGetAnalog(1, 3)) > THRESH) {
-        A3 = joystickGetAnalog(1, 3);
-      }
-      else A3 = 0;
-      if((abs)(joystickGetAnalog(1, 1)) > THRESH) {
-        A1 = joystickGetAnalog(1, 1);
-      }
-      else A1 = 0;
-      D5 = joystickGetDigital(1, 5, JOY_DOWN);
-      U5 = joystickGetDigital(1, 5, JOY_UP);
-      D6 = joystickGetDigital(1, 6, JOY_DOWN);
-      U6 = joystickGetDigital(1, 6, JOY_UP);
-      U8 = joystickGetDigital(1, 8, JOY_UP);
-      D8 = joystickGetDigital(1, 8, JOY_DOWN);
-      L8 = joystickGetDigital(1, 8, JOY_LEFT);
 
-      /*U7 = joystickGetDigital(1, 7, JOY_UP);
-      if(U7 == 1){
-        if(slowDrive) {
-          slowDrive = false;
-        }
-        else slowDrive = true;
-      }
+	while (1) {
 
-      if(slowDrive) {
-        A2 = 60*A2/(abs)(A2);
-        A3 = 60*A3/(abs)(A3);
-      }*/
-      drive(A3, A1);
+		// Get Motor Values
+		triggerUp5 = joystickGetDigital(1, 5, JOY_UP);
+		triggerDown5 = joystickGetDigital(1, 5, JOY_DOWN);
+		triggerUp6 = joystickGetDigital(1, 6, JOY_UP);
+		triggerDown6 = joystickGetDigital(1, 6, JOY_DOWN);
 
-      lift(U6, D6);
+		if((abs)(joystickGetAnalog(1, 1)) > 20) joystick1 = joystickGetAnalog(1, 1);
+		if((abs)(joystickGetAnalog(1, 3)) > 20) joystick3 = joystickGetAnalog(1, 3);
 
-      claw(U5, D5);
+		// Set Motor Values
+		drive(joystick1, joystick3);
+		claw(triggerUp5, triggerDown5);
+		lift(triggerUp6, triggerDown6);
 
-      if(D8 == 1)
-        motorSet(test, 127);
-      if(L8 == 1)
-        motorSet(test, -127);
+		if(joystickGetDigital(1, 7, JOY_LEFT)) {
+			if(isRecording) {
+				isRecording = !isRecording;
+				fclose(fp);
+			}
+			if(!isReplaying && fp == NULL) {
+				isRecording = !isRecording;
+				fp = fopen("auton.txt", "a");
+			}
+		}
 
-      if(U8) {
-        if(fileNumber == 1)
-          fileNumber = 2;
-        if(fileNumber == 2)
-          fileNumber = 3;
-        if(fileNumber == 3)
-          fileNumber = 1;
-      }
+		if(joystickGetDigital(1, 7, JOY_RIGHT)) {
+			if(isReplaying) {
+				isReplaying = !isReplaying;
+				fclose(fp);
+			}
+			if(!isRecording && fp == NULL) {
+				isReplaying = !isReplaying;
+				fp = fopen("auton.txt", "r");
+			}
+		}
 
-      if(joystickGetDigital(1, 7, JOY_LEFT)) {
-        recordAuton();
-      }
-      if(joystickGetDigital(1, 7, JOY_RIGHT)){
-        autonRep();
-      }
-  }
+		recordAuton();
+		replayAuton();
+
+		// This logic really needs to be stream-lined and reworked
+		// Auton Processing (hopefully with minimal computational overhead)
+
+		//If the Auton Recorder button is pressed
+		if(joystickGetDigital(1, 7, JOY_LEFT)) {
+			// If the file is not NULL (it already exists, either it is already recording or it is replaying),
+			// then open the file in write mode.
+			if(fp != NULL) {
+				// Checks if the file is in write mode (if it is currently recording) and closed the file and sets the pointer to null.
+
+				// if(isRecording)
+				//if(access("auton.txt", W_OK)) {
+					fclose(fp);
+					fp = NULL;
+				//}
+			}
+			else fp = fopen("auton.txt", "w");
+		}
+
+		if(joystickGetDigital(1, 7, JOY_RIGHT)) {
+			// If the file is not NULL (it already exists, either it is already recording or it is replaying),
+			// then open the file in write mode.
+			if(fp != NULL) {
+				// Checks if the file is in write mode (if it is currently recording) and closed the file and sets the pointer to null.
+				//if(access("auton.txt", R_OK)) {
+					fclose(fp);
+					fp = NULL;
+				//}
+			}
+			else fp = fopen("auton.txt", "r");
+		}
+
+		// Even if it is not recording or replaying, the function is still called
+		// This may change later
+		recordAuton();
+		replayAuton();
+
+		delay(20);
+
+	}
+
 }
