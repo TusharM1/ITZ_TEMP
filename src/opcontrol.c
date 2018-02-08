@@ -1,119 +1,192 @@
-/** @file opcontrol.c
- * @brief File for operator control code
- *
- * This file should contain the user operatorControl() function and any functions related to it.
- *
- * Any copyright is dedicated to the Public Domain.
- * http://creativecommons.org/publicdomain/zero/1.0/
- *
- * PROS contains FreeRTOS (http://www.freertos.org) whose source code may be
- * obtained from http://sourceforge.net/projects/freertos/files/ or on request.
- */
-#include "drive.h"
+#include "main.h"
+#include "opControl.h"
+//#include "Tushar.h"
 
-/*
- * Runs the user operator control code. This function will be started in its own task with the
- * default priority and stack size whenever the robot is enabled via the Field Management System
- * or the VEX Competition Switch in the operator control mode. If the robot is disabled or
- * communications is lost, the operator control task will be stopped by the kernel. Re-enabling
- * the robot will restart the task, not resume it from where it left off.
- *
- * If no VEX Competition Switch or Field Management system is plugged in, the VEX Cortex will
- * run the operator control task. Be warned that this will also occur if the VEX Cortex is
- * tethered directly to a computer via the USB A to A cable without any VEX Joystick attached.
- *
- * Code running in this task can take almost any action, as the VEX Joystick is available and
- * the scheduler is operational. However, proper use of delay() or taskDelayUntil() is highly
- * recommended to give other tasks (including system tasks such as updating LCDs) time to run.
- *
- * This task should never exit; it should end with some kind of infinite loop, even if empty.
- */
+// This is AutonRecorderv3
+// Everything is in one file to reduce complexity
 
-int joystick1 = 0, joystick3 = 0;
+// Motor Values declaration
+int joystick1, joystick3;
 int triggerUp5, triggerDown5, triggerUp6, triggerDown6;
+
+// Auton Handling variables declaration
+FILE *fp = NULL;
+bool isRecording = false;
+
+int currentTime = 0, recordTime = 0, tickSpeed = 50;
 
 void operatorControl() {
 
 	while (1) {
 
-		// Get Motor Values
-		triggerUp5 = joystickGetDigital(1, 5, JOY_UP);
-		triggerDown5 = joystickGetDigital(1, 5, JOY_DOWN);
-		triggerUp6 = joystickGetDigital(1, 6, JOY_UP);
-		triggerDown6 = joystickGetDigital(1, 6, JOY_DOWN);
+		getMotors();
+		setMotors();
 
-		if((abs)(joystickGetAnalog(1, 1)) > 20) joystick1 = joystickGetAnalog(1, 1);
-		if((abs)(joystickGetAnalog(1, 3)) > 20) joystick3 = joystickGetAnalog(1, 3);
+		//printf("%d %d ", joystick1, joystick3);
 
-		// Set Motor Values
-		drive(joystick1, joystick3);
-		claw(triggerUp5, triggerDown5);
-		lift(triggerUp6, triggerDown6);
-
-		if(joystickGetDigital(1, 7, JOY_LEFT)) {
-			if(isRecording) {
-				isRecording = !isRecording;
+		// Auton Recorder
+		if(joystickGetDigital(1, 7, JOY_LEFT) && (currentTime > (recordTime + 1000))) {
+			if(isRecording){
+				isRecording = false;
 				fclose(fp);
+				printf("Recording End\n");
 			}
-			if(!isReplaying && fp == NULL) {
-				isRecording = !isRecording;
-				fp = fopen("auton.txt", "a");
+			else {
+				isRecording = true;
+				fp = fopen("auton.txt", "w");
+				printf("Recording Start\n");
 			}
+			recordTime = currentTime;
+		}
+		if(isRecording) {
+			fseek(fp, 0, SEEK_END);
+			fprintf(fp, "%+04d %+04d %d%d%d%d ", joystick1, joystick3, triggerUp5, triggerDown5, triggerUp6, triggerDown6);
+			printf("%+04d %+04d %d%d%d%d\n", joystick1, joystick3, triggerUp5, triggerDown5, triggerUp6, triggerDown6);
 		}
 
+		// Auton Replayer
 		if(joystickGetDigital(1, 7, JOY_RIGHT)) {
-			if(isReplaying) {
-				isReplaying = !isReplaying;
-				fclose(fp);
-			}
-			if(!isRecording && fp == NULL) {
-				isReplaying = !isReplaying;
+			if(!isRecording) {
+				printf("Replaying Start \n");
 				fp = fopen("auton.txt", "r");
+				// Start Replaying
+				fseek(fp, 0, SEEK_SET);
+				while(1) {
+
+					//printf("Start ");
+					// Line and Value buffers for the reading the file;
+					// There are 15 indexes but counting is 0-14
+					char motorValues[16], valueBuffer[4], buttonValue[1];
+					// Read and print the whole line from the file
+					fgets(motorValues, 16, fp);
+					printf("%s", motorValues);
+
+					// Really Innefficient Code Here:
+					// Not something I am particularly proud of, but it works.
+					valueBuffer[0] = motorValues[0];
+					valueBuffer[1] = motorValues[1];
+					valueBuffer[2] = motorValues[2];
+					valueBuffer[3] = motorValues[3];
+					joystick1 = atoi(valueBuffer);
+					printf("%d ", joystick1);
+
+					valueBuffer[0] = motorValues[5];
+					valueBuffer[1] = motorValues[6];
+					valueBuffer[2] = motorValues[7];
+					valueBuffer[3] = motorValues[8];
+					joystick3 = atoi(valueBuffer);
+					printf("%d ", joystick3);
+
+					// Horribly innefficient way to convert characters to
+					buttonValue[0] = motorValues[10];
+					triggerUp5 = atoi(buttonValue);
+					printf("%d ", triggerUp5);
+
+					buttonValue[0] = motorValues[11];
+					triggerDown5 = atoi(buttonValue);
+					printf("%d ", triggerDown5);
+
+					buttonValue[0] = motorValues[12];
+					triggerUp6 = atoi(buttonValue);
+					printf("%d ", triggerUp6);
+
+					buttonValue[0] = motorValues[13];
+					triggerDown6 = atoi(buttonValue);
+					printf("%d ", triggerDown6);
+
+					// Here is the old code that unfortunetly doesn't work for this project
+					// Outside this project this code runs beautifully and efficiently
+
+					// Save first value and print it
+					// sprintf(valueBuffer," %.4s", motorValues);
+					// joystick1 = atoi(valueBuffer);
+					// printf("%d ", joystick1);
+
+					// Save second value and print it
+					// sprintf(valueBuffer," %.4s", motorValues + 5);
+					// joystick3 = atoi(valueBuffer);
+					// printf("%d ", joystick3);
+
+					// Save all other values and print it
+					// triggerUp5 = motorValues[10] - '0';
+					// printf("%c ", motorValues[10]);
+					//
+					// triggerDown5 = motorValues[11] - '0';
+					// printf("%c ", motorValues[11]);
+					//
+					// triggerUp6 = motorValues[12] - '0';
+					// printf("%c ", motorValues[12]);
+					//
+					// triggerDown6 = motorValues[13] - '0';
+					// printf("%c ", motorValues[13]);
+
+					printf("\n");
+
+					if(feof(fp)) break;
+					setMotors(); // Sets the values of the motors.
+
+					delay(tickSpeed);
+
+				}
+
+				fclose(fp);
+				fp = NULL;
+
+				printf("Replaying End\n");
 			}
 		}
 
-		recordAuton();
-		replayAuton();
+		delay(tickSpeed);
 
-		// This logic really needs to be stream-lined and reworked
-		// Auton Processing (hopefully with minimal computational overhead)
-
-		//If the Auton Recorder button is pressed
-		if(joystickGetDigital(1, 7, JOY_LEFT)) {
-			// If the file is not NULL (it already exists, either it is already recording or it is replaying),
-			// then open the file in write mode.
-			if(fp != NULL) {
-				// Checks if the file is in write mode (if it is currently recording) and closed the file and sets the pointer to null.
-
-				// if(isRecording)
-				//if(access("auton.txt", W_OK)) {
-					fclose(fp);
-					fp = NULL;
-				//}
-			}
-			else fp = fopen("auton.txt", "w");
-		}
-
-		if(joystickGetDigital(1, 7, JOY_RIGHT)) {
-			// If the file is not NULL (it already exists, either it is already recording or it is replaying),
-			// then open the file in write mode.
-			if(fp != NULL) {
-				// Checks if the file is in write mode (if it is currently recording) and closed the file and sets the pointer to null.
-				//if(access("auton.txt", R_OK)) {
-					fclose(fp);
-					fp = NULL;
-				//}
-			}
-			else fp = fopen("auton.txt", "r");
-		}
-
-		// Even if it is not recording or replaying, the function is still called
-		// This may change later
-		recordAuton();
-		replayAuton();
-
-		delay(20);
+		currentTime += tickSpeed;
 
 	}
+
+}
+
+// Declare Motor Values:
+// 2 Joysticks, 4 Triggers, 2 Buttons
+void getMotors() {
+
+	// Drive Controller
+	if((abs)(joystickGetAnalog(1, 1)) > 20) joystick1 = joystickGetAnalog(1, 1); else joystick1 = 0;
+	if((abs)(joystickGetAnalog(1, 3)) > 20) joystick3 = joystickGetAnalog(1, 3); else joystick3 = 0;
+
+	// Claw Controller
+	triggerUp5 = joystickGetDigital(1, 5, JOY_UP);
+	triggerDown5 = joystickGetDigital(1, 5, JOY_DOWN);
+
+	// Lift Controller
+	triggerUp6 = joystickGetDigital(1, 6, JOY_UP);
+	triggerDown6 = joystickGetDigital(1, 6, JOY_DOWN);
+
+}
+
+// Process Motors:
+// Drive, Claw, and Lift
+void setMotors() {
+
+	// I don't understand any of this logic, but I'm assuming this works
+
+	// Drive
+	if (joystick3 != 0) {
+		motorSet(MOTOR_BASE_LB, joystick3);
+		motorSet(MOTOR_BASE_LF, joystick3);
+		motorSet(MOTOR_BASE_RB, -joystick3);
+		motorSet(MOTOR_BASE_RF, -joystick3);
+	}
+	else {
+		motorSet(MOTOR_BASE_LB, joystick1);
+		motorSet(MOTOR_BASE_LF, joystick1);
+		motorSet(MOTOR_BASE_RB, joystick1);
+		motorSet(MOTOR_BASE_RF, joystick1);
+	}
+
+	// Claw
+	motorSet(CLAW, (triggerDown5 - triggerUp5) * 127);
+
+	// Lift
+	motorSet(LIFT_L, (triggerUp6 - triggerDown6) * 65);
+	motorSet(LIFT_R, (triggerDown6 - triggerUp6) * 65);
 
 }
