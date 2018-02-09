@@ -77,7 +77,7 @@ void operatorControl() {
 					joystick3 = atoi(valueBuffer);
 					printf("%d ", joystick3);
 
-					// Horribly innefficient way to convert characters to
+					// Horribly inefficient way to convert characters to int
 					buttonValue[0] = motorValues[10];
 					triggerUp5 = atoi(buttonValue);
 					printf("%d ", triggerUp5);
@@ -149,8 +149,8 @@ void operatorControl() {
 void getMotors() {
 
 	// Drive Controller
-	if((abs)(joystickGetAnalog(1, 1)) > 20) joystick1 = joystickGetAnalog(1, 1); else joystick1 = 0;
-	if((abs)(joystickGetAnalog(1, 3)) > 20) joystick3 = joystickGetAnalog(1, 3); else joystick3 = 0;
+	if((abs)(joystickGetAnalog(1, 1)) > THRESH) joystick1 = joystickGetAnalog(1, 1); else joystick1 = 0;
+	if((abs)(joystickGetAnalog(1, 3)) > THRESH) joystick3 = joystickGetAnalog(1, 3); else joystick3 = 0;
 
 	// Claw Controller
 	triggerUp5 = joystickGetDigital(1, 5, JOY_UP);

@@ -8,6 +8,7 @@
 #define LIFT_L 8
 #define LIFT_R 9
 #define CLAW 10
+#define THRESH 20
 
 void getMotors();
 void setMotors();
